@@ -17,32 +17,32 @@ const server = app.listen(port, () => {
 });
 
 const io = socketio(server);
-
-io.on('connection', (socket) => {
-    console.log('Client connected');
-
-    // Emit initial data when client connects
-    firestore.collection('messages').onSnapshot(snapshot => {
-        const data = [];
-        snapshot.forEach(doc => {
-            data.push(doc.data());
-        });
-        socket.emit('initialData', data);
-    });
-
-    // Listen for data changes in Firestore and emit updates to connected clients
-    firestore.collection('messages').onSnapshot(snapshot => {
-        const data = [];
-        snapshot.forEach(doc => {
-            data.push(doc.data());
-        });
-        io.emit('dataUpdate', data);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Client disconnected');
-    });
-});
+//
+// io.on('connection', (socket) => {
+//     console.log('Client connected');
+//
+//     // Emit initial data when client connects
+//     firestore.collection('messages').onSnapshot(snapshot => {
+//         const data = [];
+//         snapshot.forEach(doc => {
+//             data.push(doc.data());
+//         });
+//         socket.emit('initialData', data);
+//     });
+//
+//     // Listen for data changes in Firestore and emit updates to connected clients
+//     firestore.collection('messages').onSnapshot(snapshot => {
+//         const data = [];
+//         snapshot.forEach(doc => {
+//             data.push(doc.data());
+//         });
+//         io.emit('dataUpdate', data);
+//     });
+//
+//     socket.on('disconnect', () => {
+//         console.log('Client disconnected');
+//     });
+// });
 
 app.use(express.json()); // Parse JSON request bodies
 
@@ -66,4 +66,3 @@ app.post('/insertData', async (req, res) => {
 });
 
 // Read data route (Not needed anymore)
-
