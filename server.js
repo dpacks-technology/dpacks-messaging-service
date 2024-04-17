@@ -2,66 +2,85 @@ const express = require('express');
 const admin = require('firebase-admin');
 const serviceAccount = require('./key/chat-app-348dd-26cf9d7a4839.json');
 const socketio = require('socket.io');
+const cors = require('cors');
 
 admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
 });
 
 const firestore = admin.firestore();
-
 const app = express();
-const port = 4004;
-
-const server = app.listen(port, () => {
-    console.log(`app listening on port ${port}`);
-});
-
+const server = require('http').createServer(app);
 const io = socketio(server);
+const port = 4006;
+
+app.use(cors());
+app.use(express.json());
 
 io.on('connection', (socket) => {
     console.log('Client connected');
-     // Emit initial data when client connects
-     firestore.collection('chat').onSnapshot(snapshot => {
-         const data = [];
-         snapshot.forEach(doc => {
-             data.push(doc.data());
-         });
-         socket.emit('initialData', data);
-    });
 
-     // Listen for data changes in Firestore and emit updates to connected clients
-     firestore.collection('chat').onSnapshot(snapshot => {
-         const data = [];
-       snapshot.forEach(doc => {
-         data.push(doc.data());
-       });
-       io.emit('dataUpdate', data);
-  });
+    const unsubscribe = firestore
+        .collection('chat')
+        .onSnapshot((snapshot) => {
+            let data = [];
+            snapshot.forEach((doc) => {
+                data.push(doc.data());
+            });
+
+            const queryWebId = socket.handshake.query.webId;
+            const queryVisitorId = socket.handshake.query.visitorId;
+
+            if (queryWebId) {
+                data = data.map((item) => ({
+                    ...item,
+                    webId: queryWebId,
+                    visitorId: queryVisitorId,
+                    visitorName: socket.handshake.query.visitorName,
+                }));
+
+
+                io.emit('dataUpdate', { webId: queryWebId, messages: data });
+
+            }
+        });
 
     socket.on('disconnect', () => {
-         console.log('Client disconnected');
-     });
- });
+        console.log('Client disconnected');
+        unsubscribe();
+    });
+});
 
-app.use(express.json()); // Parse JSON request bodies
-
-// Insert data route
 app.post('/insertData', async (req, res) => {
     try {
-        // Data from the POST request body
         const data = req.body;
+        const webID = req.query.webId;
 
-        // Retrieve the webID from the request body
-        const webID = data.webID; // Assuming webID is included in the request
+        if (!webID) {
+            console.error('Error: webID is missing or empty');
+            return res.status(400).send('Error: webID is missing or empty');
+        }
 
-        // Create a reference to the messages collection within the specific webID document
-        const messagesRef = firestore.collection('chat').doc(webID).collection('messages');
+        await firestore.collection('chat').doc(webID).collection('messages').add({
+            ...data,
+            webID,
+            visitorId: data.visitorId,
+            visitorName: data.visitorName,
+        });
 
-        // Add the message data to the messages collection
-        await messagesRef.add(data);
+        const queryWebId = webID;
+        const queryVisitorId = data.visitorId;
 
-        // Emit the updated data to connected clients, providing the webID for filtering
-        io.emit('dataUpdate', { webID, messages: [data] });
+        const messages = await firestore
+            .collection('chat')
+            .doc(webID)
+            .collection('messages')
+            .where('visitorId', '==', data.visitorId)
+            .get();
+
+        const messageData = messages.docs.map((doc) => doc.data());
+
+        io.emit('dataUpdate', { webId: queryWebId, messages: messageData });
 
         res.send('Data inserted successfully');
     } catch (error) {
@@ -69,4 +88,98 @@ app.post('/insertData', async (req, res) => {
         res.status(500).send('Error inserting data');
     }
 });
-// Read data route (Not needed anymore)
+
+app.get('/getMessagesByWebId', async (req, res) => {
+    try {
+        const webId = req.query.webId;
+
+        if (!webId) {
+            console.error('Error: webId is missing or empty');
+            return res.status(400).send('Error: webId is missing or empty');
+        }
+
+        const messages = await firestore
+            .collection('chat')
+            .doc(webId)
+            .collection('messages')
+            .get();
+
+        const groupedMessages = messages.docs.reduce((groups, message) => {
+            const data = message.data();
+            if (!groups[data.visitorId]) {
+                groups[data.visitorId] = [];
+            }
+            groups[data.visitorId].push(data);
+            return groups;
+        }, {});
+
+        const result = Object.entries(groupedMessages).map(([visitorId, messages]) => ({
+            visitorId,
+            visitorName: messages[0].visitorName,
+            messages,
+        }));
+
+        res.send(result);
+    } catch (error) {
+        console.error('Error fetching messages: ', error);
+        res.status(500).send('Error retrieving messages');
+    }
+});
+app.get('/getMessagesByVisitorId', async (req, res) => {
+    try {
+        const { webId, visitorId } = req.query;
+
+        if (!webId || !visitorId) {
+            console.error('Error: webId or visitorId is missing or empty');
+            return res.status(400).send('Error: webId or visitorId is missing or empty');
+        }
+
+        const messages = await firestore
+            .collection('chat')
+            .doc(webId)
+            .collection('messages')
+            .where('visitorId', '==', visitorId)
+            .get();
+
+        const messageData = messages.docs.map((doc) => doc.data());
+        res.send(messageData);
+    } catch (error) {
+        console.error('Error fetching messages: ', error);
+        res.status(500).send('Error retrieving messages');
+    }
+});
+
+server.listen(port, () => {
+    console.log(`app listening on port ${port}`);
+});
+app.get('/getLastMessage', async (req, res) => {
+    try {
+        const { webId, visitorId } = req.query;
+
+        if (!webId || !visitorId) {
+            console.error('Error: webId or visitorId is missing or empty');
+            return res.status(400).send('Error: webId or visitorId is missing or empty');
+        }
+
+        const messagesQuery = firestore
+            .collection('chat')
+            .doc(webId)
+            .collection('messages')
+            .where('visitorId', '==', visitorId)
+            .orderBy('time', 'desc')
+            .limit(1);
+
+        const messagesDoc = await messagesQuery.get();
+
+        if (messagesDoc.empty) {
+            return res.status(200).send(null);
+        }
+
+        const messageData = messagesDoc.docs[0].data();
+        io.emit('dataUpdate', { webId: webId, messages: messageData });
+        res.send(messageData);
+    } catch (error) {
+        console.error('Error fetching last message: ', error);
+        res.status(500).send('Error retrieving last message');
+    }
+});
