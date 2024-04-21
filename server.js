@@ -20,52 +20,36 @@ app.use(express.json());
 io.on('connection', (socket) => {
     console.log('Client connected');
 
-    socket.on('fetchMessages', async (webId) => {
-        const messages = await firestore
-            .collection('chat')
-            .doc(webId)
-            .collection('messages')
-            .get();
-
-        const groupedMessages = messages.docs.reduce((groups, message) => {
-            const data = message.data();
-            if (!groups[data.visitorId]) {
-                groups[data.visitorId] = [];
-            }
-            groups[data.visitorId].push(data);
-            return groups;
-        }, {});
-
-        const result = Object.entries(groupedMessages).map(([visitorId, messages]) => ({
-            visitorId,
-            visitorName: messages[0].visitorName,
-            messages,
-        }));
-
-        socket.emit('newMessage', { webId, messages: result });
-    });
-
-    socket.on('sendMessage', async (data) => {
-        try {
-            await firestore.collection('chat').doc(data.webId).collection('messages').add({
-                ...data,
-                webID: data.webId,
-                visitorId: data.visitorId,
-                visitorName: data.visitorName,
+    const unsubscribe = firestore
+        .collection('chat')
+        .onSnapshot((snapshot) => {
+            let data = [];
+            snapshot.forEach((doc) => {
+                data.push(doc.data());
             });
 
-            io.emit('newMessage', { webId: data.webId, message: [data] });
-        } catch (error) {
-            console.error('Error adding document: ', error);
-        }
-    });
+            const queryWebId = socket.handshake.query.webId;
+            const queryVisitorId = socket.handshake.query.visitorId;
+
+            if (queryWebId) {
+                data = data.map((item) => ({
+                    ...item,
+                    webId: queryWebId,
+                    visitorId: queryVisitorId,
+                    visitorName: socket.handshake.query.visitorName,
+                }));
+
+
+                io.emit('dataUpdate', { webId: queryWebId, messages: data });
+
+            }
+        });
 
     socket.on('disconnect', () => {
         console.log('Client disconnected');
-
+        unsubscribe();
     });
 });
-
 
 app.post('/insertData', async (req, res) => {
     try {
@@ -97,7 +81,8 @@ app.post('/insertData', async (req, res) => {
         const messageData = messages.docs.map((doc) => doc.data());
 
 
-        io.emit('newMessage', { webId: webID, message: [data] });
+        io.emit('newMessage', { webId: webID, message: messageData });
+
         io.emit('dataUpdateByVisitorId', { webId: queryWebId, visitorId: queryVisitorId, messages: messageData });
 
         res.send('Data inserted successfully');
