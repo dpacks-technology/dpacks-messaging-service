@@ -3,8 +3,6 @@ const admin = require('firebase-admin');
 const serviceAccount = require('./key/chat-app-348dd-26cf9d7a4839.json');
 const cors = require('cors');
 
-
-
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
@@ -14,14 +12,9 @@ const app = express();
 const server = require('http').createServer(app);
 const port = 4006;
 const io = require('socket.io')(server);
-const { isValidUTF8 } = require('utf-8-validate');
 
 app.use(cors());
 app.use(express.json());
-
-
-
-
 
 app.post('/insertData', async (req, res) => {
     try {
@@ -50,12 +43,8 @@ app.post('/insertData', async (req, res) => {
             .get();
 
         const messageData = messages.docs.map((doc) => doc.data());
-        const dataToSend = 'This is some data';
 
-
-            io.emit('newMessage', messageData[0]);
-
-
+        io.emit('newMessage', messageData[0]);
 
         res.send('Data inserted successfully');
     } catch (error) {
@@ -128,6 +117,7 @@ app.get('/getMessagesByVisitorId', async (req, res) => {
         res.status(500).send('Error retrieving messages');
     }
 });
+
 
 app.get('/getLastMessage', async (req, res) => {
     try {
