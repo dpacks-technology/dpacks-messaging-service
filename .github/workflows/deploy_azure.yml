@@ -21,5 +21,7 @@ jobs:
             sudo git clone https://${{ secrets.GH_USERNAME }}:${{ secrets.GH_ACCESS_TOKEN }}@github.com/dpacks-technology/dpacks-messaging-service.git ./messaging
             cd messaging
             sudo git fetch origin && sudo git pull origin main
+            sudo docker stop dpacks-messaging-service
+            sudo docker rm dpacks-messaging-service
             sudo docker build -t dpacks-messaging-service:latest .
             sudo docker run -d --name dpacks-messaging-service -p 4006:4006 dpacks-messaging-service:latest"
