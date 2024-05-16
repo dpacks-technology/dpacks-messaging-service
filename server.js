@@ -56,7 +56,7 @@ app.post('/insertData', async (req, res) => {
 app.get('/getMessagesByWebId', async (req, res) => {
     try {
         const webId = req.query.webId;
-        console.log("webID")
+
 
         if (!webId) {
             console.error('Error: webId is missing or empty');
@@ -95,7 +95,7 @@ app.get('/getMessagesByWebId', async (req, res) => {
 app.get('/getMessagesByVisitorId', async (req, res) => {
     try {
         const { webId, visitorId } = req.query;
-        console.log("visitorID")
+
         // Server-side validation
         if (!webId || !visitorId) {
             console.error('Error: webId or visitorId is missing or empty');
@@ -122,7 +122,7 @@ app.get('/getMessagesByVisitorId', async (req, res) => {
 app.get('/getLastMessage', async (req, res) => {
     try {
         const { webId, visitorId } = req.query;
-        console.log("lastmessage")
+
         const messageDoc = await firestore
             .collection('chat')
             .doc(webId)
