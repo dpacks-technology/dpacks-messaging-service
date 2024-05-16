@@ -124,3 +124,13 @@ dist/
 
 # IDE
 .idea/
+
+# Ignore node_modules directory
+node_modules/
+
+# Ignore environment files
+.env
+
+# Ignore any other sensitive files or directories
+private-key.json
+secret-key.txt
